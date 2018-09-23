@@ -119,12 +119,14 @@ def checkTestCase_format(all_codes, list_TestCases, begin_counter):
                     "initialise_global_data()", "Set expected values for global data checks", "initialise_expected_global_data()",
                     "Expected Call Sequence", "EXPECTED_CALLS", "Call SUT", "Test case checks", "Expected Result",
                     "Checks on global data", "check_global_data()", "GUID"]
-    list_checked = []
+    
 
     state = "Unidentified"
+    list_checked = []
     for LineofCode in (all_codes[begin_counter:]):
         line_counter += 1
         pre_state = state
+        
         state = state_machine(LineofCode, list_to_check, list_checked, pre_state, str(line_counter))
 
         if (state == "Tester define"):
@@ -138,6 +140,7 @@ def checkTestCase_format(all_codes, list_TestCases, begin_counter):
             check_list_to_check(list_to_check, list_checked)
             list_Tester_Define_Declaration = []
             list_Tester_Define_Init = []
+            list_checked = []
 
         if (state == "End of Checking Test Cases"):
             return Stub_Functions_list, line_counter+1
