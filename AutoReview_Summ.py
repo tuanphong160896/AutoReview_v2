@@ -37,6 +37,7 @@ def main_Summ(dir):
         except Exception as e:
             print_writetoReport("Cannot open "+ TestSpec_path + "\n" + str(e))
             continue
+            
         Check_Stream_Summ()
         Check_TestPlan_Sheet()
         Find_TCSheet_Summ()

@@ -7,7 +7,7 @@
 import os
 import sys
 import glob
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QRect
 from PyQt5 import QtGui
 from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QToolButton, QPushButton, QLineEdit, QMessageBox, QLabel, QFileDialog
 from win32api import GetSystemMetrics
@@ -24,19 +24,13 @@ class App(QMainWindow):
         super().__init__()
         self.title = 'Auto Review Tool'
         self.setWindowIcon(QtGui.QIcon('github.ico'))
-        self.MonitorWidth = GetSystemMetrics(0)
-        self.left = int(self.MonitorWidth/100)
-        self.top = int(self.MonitorWidth/100)
-        self.width = int(self.MonitorWidth / 3.1)
-        self.height = int(self.MonitorWidth / 3.1)
         self.initUI()
 
  #################################################
 
     def initUI(self):
         self.setWindowTitle(self.title)
-        self.setGeometry(self.left, self.top, self.width, self.height)
-        self.unit_size = int((self.MonitorWidth)/1000)
+        self.setGeometry(10, 10, 550, 330)
 
         #create Menu
         mainMenu = self.menuBar()
@@ -54,62 +48,52 @@ class App(QMainWindow):
  
         self.label = QLabel(instruction_text, self)
         self.label.setFont(QtGui.QFont('MS San Serif', 8))
-        self.label.move((self.unit_size)*20,(self.unit_size)*30)
         self.label.setAlignment(Qt.AlignLeft)
+        self.label.setGeometry(QRect(25, 40, 0, 0))
         self.label.adjustSize()
 
-        #insert PYTHON logo
-        # self.github = QLabel(self)
-        # self.github.pic = QtGui.QPixmap('Octocat.png')
-        # self.github.setPixmap(self.github.pic)
-        # self.github.adjustSize()
-        # self.github.move((self.unit_size)*58,(self.unit_size)*22)
-        # self.github.show()
+        # insert PYTHON logo
+        self.github = QLabel(self)
+        self.github.pic = QtGui.QPixmap('Octocat.png')
+        self.github.setPixmap(self.github.pic)
+        self.github.setGeometry(QRect(325, 135, 0, 0))
+        self.github.adjustSize()
+        self.github.show()
 
         # Create textbox
         self.textbox = QLineEdit(self)
-        self.textbox.move((self.unit_size)*20, (self.unit_size)*110)
-        self.textbox.resize((self.unit_size)*280, (self.unit_size)*30)
+        self.textbox.setGeometry(QRect(25, 130, 275, 32))
         
         #Create Browse directory button
         self.button_browse = QToolButton(self)
         self.button_browse.setText('...')
-        self.button_browse.move((self.unit_size)*314, (self.unit_size)*110)
-        self.button_browse.resize((self.unit_size)*40, (self.unit_size)*30)
+        self.button_browse.setGeometry(QRect(320, 130, 32, 32))
         self.button_browse.clicked.connect(self.browse_root_dir)
 
         # Create Review Script button
         self.button_script = QPushButton('Review Test Script', self)
-        self.button_script.move((self.unit_size)*20, (self.unit_size)*160)
-        self.button_script.resize((self.unit_size)*120, (self.unit_size)*40)
-        #self.button_script.setEnabled(False)
+        self.button_script.setGeometry(QRect(25, 190, 120, 35))
         self.button_script.clicked.connect(self.Review_Test_Script)
 
         # Create Review Spec button
         self.button_spec = QPushButton('Review Test Spec', self)
-        self.button_spec.move((self.unit_size)*20, (self.unit_size)*220)
-        self.button_spec.resize((self.unit_size)*120, (self.unit_size)*40)
-        #self.button_spec.setEnabled(False)
+        self.button_spec.setGeometry(QRect(180, 190, 120, 35))
         self.button_spec.clicked.connect(self.Review_Test_Spec)
 
         # Create Review Summary button
-        self.button_summ = QPushButton('Review Test Summary', self)
-        self.button_summ.move((self.unit_size)*181, (self.unit_size)*160)
-        self.button_summ.resize((self.unit_size)*120, (self.unit_size)*40)
-        #self.button_summ.setStyleSheet("border-style: solid; border-color: #0986ED; border-width: 2px;");
-        #self.button_summ.setEnabled(False)
+        self.button_summ = QPushButton('Review Test Summ', self)
+        self.button_summ.setGeometry(QRect(25, 250, 120, 35))
         self.button_summ.clicked.connect(self.Review_Test_Summ)
 
         #Create open newest .txt file
         self.button_open = QPushButton('Open Report', self)
-        self.button_open.move((self.unit_size)*181, (self.unit_size)*220)
-        self.button_open.resize((self.unit_size)*120, (self.unit_size)*40)
+        self.button_open.setGeometry(QRect(180, 250, 120, 35))
         self.button_open.setEnabled(False)
         self.button_open.clicked.connect(self.Open_latest_report)
 
-        self.move(self.width, int(self.height)/2.5)
-        self.show() 
 
+        self.move(500, 200)
+        self.show() 
 #################################################
 
     def browse_root_dir(self):

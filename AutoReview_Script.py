@@ -39,7 +39,7 @@ def getReportName(dir):
         repo = Repo(dir, search_parent_directories=True)
         active_branch = str(repo.active_branch)
     except Exception as e:
-        print("Cannot find current active branch in git")
+        print_writetoReport("Cannot find current active branch in git")
         active_branch = 'defaultbranch'
     
     #get datetime
@@ -115,7 +115,7 @@ def checkTestCase_format(all_codes, list_TestCases, begin_counter):
     list_Tester_Define_Init = []
     Expected_Calls_flag = 0
     Stub_Functions_list = []
-    list_to_check = ["Test Method", "Tester define", "Test case data declarations", "Set global data",
+    list_to_check = ["Compilation Flag", "Test Method", "Tester define", "Test case data declarations", "Set global data",
                     "initialise_global_data()", "Set expected values for global data checks", "initialise_expected_global_data()",
                     "Expected Call Sequence", "EXPECTED_CALLS", "Call SUT", "Test case checks", "Expected Result",
                     "Checks on global data", "check_global_data()", "GUID"]
@@ -127,7 +127,15 @@ def checkTestCase_format(all_codes, list_TestCases, begin_counter):
         line_counter += 1
         pre_state = state
         
-        state = state_machine(LineofCode, list_to_check, list_checked, pre_state, str(line_counter))
+        state = state_machine(LineofCode, list_to_check, list_checked, pre_state)
+
+        if ((state == "Begin Test Case") and (pre_state != state)):
+            TestCase_name = (LineofCode.strip())[5:-11]
+            print_writetoReport("\n\nChecking format of TC: " + TestCase_name + " at line " + str(line_counter))
+            if (pre_state == "Unidentified"): 
+                check1stTC = 1
+            else: 
+                check1stTC = 0
 
         if (state == "Tester define"):
             get_content_Tester_define(LineofCode, list_Tester_Define_Declaration, list_Tester_Define_Init)
@@ -137,7 +145,7 @@ def checkTestCase_format(all_codes, list_TestCases, begin_counter):
 
         if ((state == "End Test Case") and (pre_state != state)):
             check_content_Tester_define(list_Tester_Define_Declaration, list_Tester_Define_Init)
-            check_list_to_check(list_to_check, list_checked)
+            check_list_to_check(list_to_check, list_checked, check1stTC)
             list_Tester_Define_Declaration = []
             list_Tester_Define_Init = []
             list_checked = []
@@ -149,13 +157,9 @@ def checkTestCase_format(all_codes, list_TestCases, begin_counter):
 #################################################
 
 
-def state_machine(LineofCode, list_to_check, list_checked, pre_state, line_counter):
+def state_machine(LineofCode, list_to_check, list_checked, pre_state):
     returnvalue = pre_state
     if ((LineofCode.find('void') != -1) and (LineofCode.find('(int doIt)') != -1)):
-        
-        TestCase_name = (LineofCode.strip())[5:-11]
-        print_writetoReport("\n\nChecking format of TC: " + TestCase_name + " at line " + line_counter)
-        
         returnvalue = "Begin Test Case"
         return returnvalue
 
@@ -222,10 +226,13 @@ def check_content_Tester_define(list_Tester_Define_Declaration, list_Tester_Defi
 ##################################################  
    
 
-def check_list_to_check(list_to_check, list_checked):
+def check_list_to_check(list_to_check, list_checked, check1stTC):
     for tocheck in list_to_check:
         if tocheck not in list_checked:
-            print_writetoReport("\n- WARNING: Lack of " + tocheck)
+            if ((tocheck == "Compilation Flag") and (check1stTC == 0)):
+                continue
+            else:
+                print_writetoReport("\n- WARNING: Lack of " + tocheck)
 
 ################################################## 
 
@@ -353,7 +360,7 @@ def getInstanceName(LineofCode):
     return instance_name
 
 #################################################
-
+ 
 def print_writetoReport(content):
     print(content)
     report_Script.write(content)

@@ -145,13 +145,13 @@ def Check_TCSheet_content(content_reference,content,list_checked):
     # Check Covered Design_Id #
     if (content_reference == "Test Case Expected Results"):
         list_checked.append(content_reference)
-        if (len(content) == 0):
+        if (len(content.strip()) == 0):
             print_writetoReport("\n- WARNING: Test Case Expected Results was not filled")
 
     # Check Covered Design_Id #
     elif (content_reference == "Covered Design_Id"):
         list_checked.append(content_reference)
-        if ((content == "Missing GUID") or (len(content) == 0)):
+        if ((content.strip() == "Missing GUID") or (len(content.strip()) == 0)):
             print_writetoReport("\n- WARNING: GUID was not filled")
 
     # Check Set #
