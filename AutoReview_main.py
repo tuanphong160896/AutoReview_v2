@@ -10,7 +10,6 @@ import glob
 from PyQt5.QtCore import Qt, QRect
 from PyQt5 import QtGui
 from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QToolButton, QPushButton, QLineEdit, QMessageBox, QLabel, QFileDialog
-from win32api import GetSystemMetrics
 import AutoReview_Script as AutoReview_Script
 import AutoReview_Spec as AutoReview_Spec
 import AutoReview_Summ as AutoReview_Summ
