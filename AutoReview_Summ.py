@@ -2,15 +2,14 @@ import os
 import re
 import xlrd
 import re
-from git import Repo
-from datetime import datetime
+from AutoReivew_Common import print_writetoReport
+
 
 #################################################
 
 
-def main_Summ(dir):
+def main_Summ(dir, report_name):
     global report_Summ
-    report_name = getReportName(dir)
     report_Summ = open(report_name, "w")
 
     directory_Summ = dir + "/04_TestReportSummary/"

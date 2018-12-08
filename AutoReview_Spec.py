@@ -1,14 +1,14 @@
 import os
 import re
 import xlrd
-from datetime import datetime
-from git import Repo
+from AutoReivew_Common import print_writetoReport
+
+
 #################################################
 
 
-def main_Spec(dir):
+def main_Spec(dir, report_name):
     global report_Spec
-    report_name = getReportName(dir)
     report_Spec = open(report_name, "w")
 
     directory_Spec = dir + "/01_TestSpecification/"
@@ -192,11 +192,5 @@ def Compare_Checked_toCheck(list_checked, list_to_check, TCSheet):
         if tocheck not in list_checked:
             print_writetoReport("\n- WARNING: Cannot find " + tocheck + " in " + TCSheet)
 
-
-#################################################
-
-def print_writetoReport(content):
-    print(content)
-    report_Spec.write(content)
 
 #################################################

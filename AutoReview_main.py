@@ -11,8 +11,9 @@ from PyQt5.QtCore import Qt, QRect
 from PyQt5 import QtGui
 from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QToolButton, QPushButton, QLineEdit, QMessageBox, QLabel, QFileDialog
 import AutoReview_Script as AutoReview_Script
-import AutoReview_Spec as AutoReview_Spec
-import AutoReview_Summ as AutoReview_Summ
+# import AutoReview_Spec as AutoReview_Spec
+# import AutoReview_Summ as AutoReview_Summ
+from datetime import datetime
 #from timeit import default_timer as timer
 
 #################################################
@@ -25,7 +26,9 @@ class App(QMainWindow):
         self.setWindowIcon(QtGui.QIcon('github.ico'))
         self.initUI()
 
+
  #################################################
+
 
     def initUI(self):
         self.setWindowTitle(self.title)
@@ -62,6 +65,7 @@ class App(QMainWindow):
         # Create textbox
         self.textbox = QLineEdit(self)
         self.textbox.setGeometry(QRect(25, 130, 275, 32))
+        self.textbox.setText("C:/Users/tuanp/Desktop/Dem/Com_Section3_4/rba/TEST/ComServices/Com")
         
         #Create Browse directory button
         self.button_browse = QToolButton(self)
@@ -88,12 +92,15 @@ class App(QMainWindow):
         self.button_open = QPushButton('Open Report', self)
         self.button_open.setGeometry(QRect(180, 250, 120, 35))
         self.button_open.setEnabled(False)
-        self.button_open.clicked.connect(self.Open_latest_report)
+        self.button_open.clicked.connect(Open_latest_report)
 
 
         self.move(500, 200)
         self.show() 
+
+
 #################################################
+
 
     def browse_root_dir(self):
         try:
@@ -106,35 +113,40 @@ class App(QMainWindow):
            
 #################################################
 
+
     def Review_Test_Script(self):
-        if (self.textbox.text() == ""):
+        root_dir = self.textbox.text()
+        if (root_dir == ""):
             QMessageBox.warning(self, 'Auto Review Tool', 'Plese input a directory')
         else:
-            #start = timer()
-            AutoReview_Script.main_Script(self.textbox.text())
-            #end = timer()
-            #elapsed_time = end - start
+            report_name = getReportName(root_dir, "Script")
+            AutoReview_Script.main_Script(root_dir, report_name)
             self.button_open.setEnabled(True)
-            #QMessageBox.warning(self, 'Auto Review Tool', 'Review Test Script done in: ' + str(elapsed_time))
             QMessageBox.warning(self, 'Auto Review Tool', 'Review Test Script done !')
            
+
 #################################################
 
+
     def Review_Test_Spec(self):
-        if (self.textbox.text() == ""):
+        root_dir = self.textbox.text()
+        if (root_dir == ""):
             QMessageBox.warning(self, 'Auto Review Tool', 'Plese input a directory')
         else:
-            AutoReview_Spec.main_Spec(self.textbox.text())
+            report_name = getReportName(root_dir, "Spec")
+            AutoReview_Spec.main_Spec(root_dir, report_name)
             self.button_open.setEnabled(True)
             QMessageBox.warning(self, 'Auto Review Tool', 'Review Test Spec done !')
 
 
     def Review_Test_Summ(self):
-        if (self.textbox.text() == ""):
+        root_dir = self.textbox.text()
+        if (root_dir == ""):
             QMessageBox.warning(self, 'Auto Review Tool', 'Plese input a directory')
         else:
-            if (CheckNumberofFiles(self.textbox.text())):
-                AutoReview_Summ.main_Summ(self.textbox.text())
+            if (CheckNumberofFiles(root_dir)):
+                report_name = getReportName(root_dir, "Summ")
+                AutoReview_Spec.main_Spec(root_dir, report_name)
                 self.button_open.setEnabled(True)
                 QMessageBox.warning(self, 'Auto Review Tool', 'Review Test Summ done !')
 
@@ -142,12 +154,38 @@ class App(QMainWindow):
                 QMessageBox.warning(self, 'Auto Review Tool', 'The tool can not continue...')
 
 
-    def Open_latest_report(self):
-        latest_file = max(glob.glob('*.txt'), key=os.path.getctime)
-        os.system("start notepad.exe " + latest_file)
-        latest_file = ""
-           
 #################################################
+
+
+def getReportName(roor_dir, report_type):
+
+    #get Component name
+    try:
+        inverse_dir = roor_dir[::-1]
+        first_slash_index = inverse_dir.index("/")
+        component_name = inverse_dir[:first_slash_index]
+        component_name = component_name[::-1]
+    except Exception as e:
+        component_name = "default"
+
+    #get datetime
+    time = str(datetime.now().strftime("%H%M%S"))
+
+    #Report name
+    report_name = "Review_" + report_type + "_" + component_name + "_" + time + ".txt"
+    return report_name
+
+
+#################################################
+
+
+def Open_latest_report():
+    latest_file = max(glob.glob('*.txt'), key=os.path.getctime)
+    os.system("start notepad.exe " + latest_file)
+           
+
+#################################################
+
 
 def CheckNumberofFiles(dir):
     directory_Spec = dir + "/01_TestSpecification"
@@ -168,7 +206,9 @@ def CheckNumberofFiles(dir):
         QMessageBox.warning(None, 'Auto Review Tool', 'The numbers of files in 3 folders are different')
         return 0
 
+
 #################################################
+
 
 def countNumberofFiles(dir):
     count = 0
@@ -178,7 +218,9 @@ def countNumberofFiles(dir):
                 count += 1
     return count
 
+
 #################################################
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)

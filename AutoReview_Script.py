@@ -1,71 +1,43 @@
 import os
-import re
-from datetime import datetime
-from git import Repo
+from AutoReivew_Common import Export_Report
+from Report_Definition import *
+import time
+
 
 #################################################
 
 
-def main_Script(dir):
-    global report_Script
-    report_name = getReportName(dir)
-    report_Script = open(report_name, "w")
+def main_Script(dir, report_name):
+    start_time = time.time()
+    global report_content
+    report_content = []
 
     directory_Script = dir + "/02_TestScript/"
-    list_dir_TestScript_files = findAllTestScripts(directory_Script)
+    list_dir_script = findScriptdir(directory_Script)
 
-    for dir_TestScript_file in list_dir_TestScript_files:
-        #get .c filename
-        try:
-            inverse_dir = dir_TestScript_file[::-1]
-            first_slash_index = inverse_dir.index("/")
-            inverse_Cfile_name = inverse_dir[:first_slash_index]
-            Cfile_name = inverse_Cfile_name[::-1]
-        except Exception as e:
-            print_writetoReport("Cannot get Test Script name in " + dir_TestScript_file + "\n" + str(e))
-            continue
+    for dir_script in list_dir_script:
+        report_content.append(START_C_FILE + dir_script + PROCESSING)
+        ScanTestScript(dir_script)
+        report_content.append(END_C_FILE)
 
-        print_writetoReport("Checking file " + Cfile_name + "...")
-        ScanTestScript(dir_TestScript_file)
-        print_writetoReport("\n\n*********************************************************\n\n")
-    
-    report_Script.close()
+    Export_Report(report_name, report_content)
+    elapsed_time = time.time() - start_time
+    print(elapsed_time)
 
-#################################################
-
-def getReportName(dir):
-    #get current active branch
-    try:
-        repo = Repo(dir, search_parent_directories=True)
-        active_branch = str(repo.active_branch)
-    except Exception as e:
-        print_writetoReport("Cannot find current active branch in git")
-        active_branch = 'defaultbranch'
-    
-    #get datetime
-    time = str(datetime.now().strftime("%H%M%S"))
-
-    #Report name
-    report_name = "Review_TestScript_" + active_branch + "_" + time + ".txt"
-    return report_name
 
 #################################################
 
 
-def findAllTestScripts(directory_Script):
+def findScriptdir(directory_Script):
     list_dir_Cfiles = []
-    for root, dirs, Files in os.walk(directory_Script):
-
-        check_tests = re.search('tests', root)
-        if (check_tests):
-            for filename in Files:
-                inverse_name = filename[::-1]
-                if (inverse_name[0:2] == 'c.'):
-                    dir_Cfile = root + "/" + filename
-                    list_dir_Cfiles.append(dir_Cfile)
+    for path, subdirs, files in os.walk(directory_Script):
+        for filename in files:
+            if filename.endswith(".c"):
+                filepath = os.path.join(path, filename)
+                list_dir_Cfiles.append(filepath)
 
     if (len(list_dir_Cfiles) == 0):
-        print_writetoReport("\n- WARNING: Cannot find any Test Script file.\nThe tool stopped here.")
+        report_content.append(FILE_NOT_FOUND)
 
     return list_dir_Cfiles
 
@@ -73,33 +45,26 @@ def findAllTestScripts(directory_Script):
 #################################################
 
 
-def ScanTestScript(dir_TestScript_file):
+def ScanTestScript(dir_script):
     try:
-        C_file = open(dir_TestScript_file, "r")
+        C_file = open(dir_script, "r")
         all_codes = C_file.readlines()
     except Exception as e:
-        print_writetoReport("Cannot open Test Script file. The tool stopped here.")
+        report_content.append(UNABLE_OPEN_FILE)
         return
 
-    declare_TC_flag = 0
-    list_TestCases = []
-    line_counter = 0
-    for LineofCode in all_codes:
-        line_counter += 1
-        if ((LineofCode.find('void run_tests()') != -1) and (LineofCode.find(';') == -1)):
-            declare_TC_flag = 1
+    state = 0
 
-        if (declare_TC_flag == 1):
-            if (LineofCode.find('(1)') != -1):
-                TestCase_name = (LineofCode.strip())[0:-4]
-                list_TestCases.append(TestCase_name)
+    for LineCounter, LineofCode in enumerate(all_codes, start = 1):
+        pre_state = state
+        state = state_machine_Init(LineofCode, pre_state)
+        if (state == 1):
+            pass
+        elif (state == 2): 
+            begincheckTCline = LineCounter
+            break
 
-            if (LineofCode.find('rule_set') != -1):
-                declare_TC_flag = 0
-                break
-
-    Stub_Functions_list, begin_stub_functions_line = checkTestCase_format(all_codes, list_TestCases, line_counter)
-    check_Stub_Functions(all_codes, Stub_Functions_list , begin_stub_functions_line)
+    ReviewTestScript(all_codes, begincheckTCline)
 
     C_file.close()
     del C_file
@@ -108,261 +73,327 @@ def ScanTestScript(dir_TestScript_file):
 #################################################
 
 
-def checkTestCase_format(all_codes, list_TestCases, begin_counter):
-    line_counter = begin_counter
+def ReviewTestScript(all_codes, begin_counter):
+    state = UNDEFINED_STATE
+    (TesterDef_lst, ExptCalls_lst, Checked_lst, CalledSeq_lst, VerfCrit_lst) = ([], [], [], [], [])
 
-    list_Tester_Define_Declaration = []
-    list_Tester_Define_Init = []
-    Expected_Calls_flag = 0
-    Stub_Functions_list = []
-    list_to_check = ["Compilation Flag", "Test Method", "Tester define", "Test case data declarations", "Set global data",
-                    "initialise_global_data()", "Set expected values for global data checks", "initialise_expected_global_data()",
-                    "Expected Call Sequence", "EXPECTED_CALLS", "Call SUT", "Test case checks", "Expected Result",
-                    "Checks on global data", "check_global_data()", "GUID"]
-    
-
-    state = "Unidentified"
-    list_checked = []
-    for LineofCode in (all_codes[begin_counter:]):
-        line_counter += 1
+    for LineCounter, LineofCode in enumerate(all_codes[begin_counter:], start = begin_counter+1):
         pre_state = state
-        
-        state = state_machine(LineofCode, list_to_check, list_checked, pre_state)
+        state = state_machine(LineofCode, Checked_lst, pre_state)
 
-        if ((state == "Begin Test Case") and (pre_state != state)):
-            TestCase_name = (LineofCode.strip())[5:-11]
-            print_writetoReport("\n\nChecking format of TC: " + TestCase_name + " at line " + str(line_counter))
-            if (pre_state == "Unidentified"): 
-                check1stTC = 1
-            else: 
-                check1stTC = 0
-
-        if (state == "Tester define"):
-            get_content_Tester_define(LineofCode, list_Tester_Define_Declaration, list_Tester_Define_Init)
-
-        if (state == "EXPECTED_CALLS"):
-            get_stub_functions(LineofCode, Stub_Functions_list)
-
-        if ((state == "End Test Case") and (pre_state != state)):
-            check_content_Tester_define(list_Tester_Define_Declaration, list_Tester_Define_Init)
-            check_list_to_check(list_to_check, list_checked, check1stTC)
-            list_Tester_Define_Declaration = []
-            list_Tester_Define_Init = []
-            list_checked = []
-
-        if (state == "End of Checking Test Cases"):
-            return Stub_Functions_list, line_counter+1
+        if ((state == BEGIN_TEST_CASE) and (pre_state != state)):
+            BeginTestCase(LineofCode, LineCounter)
+        elif (state == TESTERDEFINE_STR):
+            TesterDef_lst.append(LineofCode)
+        elif (state == EXPTCALL):
+            ExptCalls_lst.append(LineofCode)
+        elif (state == VC):
+            VerfCrit_lst.append(LineofCode)
+        elif ((state == END_TEST_CASE) and (pre_state != state)):
+            checkTesterDef(TesterDef_lst)
+            getCalledSeq(ExptCalls_lst, CalledSeq_lst)
+            check_TO_CHECK_LST(Checked_lst)
+            checkVCmapped(Checked_lst, VerfCrit_lst)
+            (TesterDef_lst, ExptCalls_lst, Checked_lst, VerfCrit_lst) = ([], [], [], [])
+        elif (state == END_ALL_TEST_CASES):
+            Review_Call_Interface(all_codes, CalledSeq_lst , LineCounter)
+            break
 
 
 #################################################
 
 
-def state_machine(LineofCode, list_to_check, list_checked, pre_state):
-    returnvalue = pre_state
-    if ((LineofCode.find('void') != -1) and (LineofCode.find('(int doIt)') != -1)):
-        returnvalue = "Begin Test Case"
-        return returnvalue
+def state_machine_Init(LineofCode, pre_state):
+    retval = pre_state
+    if (isBeginDeclareTestCases(LineofCode)):
+        retval = 1
+    
+    elif (isEndDeclareTestCases(LineofCode)):
+        retval = 2
+    
+    return retval
 
-    for element_to_check in list_to_check:
-        if (re.search(element_to_check.lower(), LineofCode.lower())):
-            list_checked.append(element_to_check)
-            returnvalue = element_to_check
-            return returnvalue
 
-    if (LineofCode.find('END_TEST();') != -1):
-        returnvalue = "End Test Case"
-        return returnvalue
+#################################################
 
-    if (LineofCode.find('Call Interface Control') != -1):
-        returnvalue = "End of Checking Test Cases"
-        return returnvalue
-        
-    return returnvalue
+
+def state_machine(LineofCode, Checked_lst, pre_state):
+    retval = pre_state
+
+    if (isBeginTestCase(LineofCode)):
+        retval = BEGIN_TEST_CASE
+    elif (isEndTestCase(LineofCode)):
+        retval = END_TEST_CASE
+    elif (isEndAllTestCases(LineofCode)):
+        retval = END_ALL_TEST_CASES
+    else:
+        for element_to_check in TO_CHECK_LST:
+            if (element_to_check.lower() in LineofCode.lower()):
+                Checked_lst.append(element_to_check)
+                retval = element_to_check
+                break
+
+    return retval
 
 
 ################################################# 
+
+
+def BeginTestCase(lineofcode, linecounter):
+    TestCase_name = (lineofcode.strip())[5:-11]
+    report_content.append(START_TESTCASE + TestCase_name + AT_LINE + str(linecounter) + PROCESSING)
+
     
-
-def get_content_Tester_define(lineofcode, list_Tester_Define_Declaration, list_Tester_Define_Init):
-    if ((lineofcode.find('INITIALISE') == -1) and (lineofcode.find('_entity') != -1) 
-        and (lineofcode.find('=') == -1)  and (lineofcode.find('[') == -1)):
-        var_Declare = lineofcode.strip()
-        try:
-            space_index = var_Declare.index(' ')
-            var_Declare = var_Declare[space_index+1:-1]
-            list_Tester_Define_Declaration.append(var_Declare)
-        except:
-            pass
-
-    if ((lineofcode.find('INITIALISE') != -1) and (lineofcode.find('_entity') != -1)):
-        var_Init = lineofcode.strip()
-        var_Init = var_Init[11:-2]
-        list_Tester_Define_Init.append(var_Init)
+################################################# 
 
 
-##################################################
-
-
-def get_stub_functions(LineofCode, Stub_Functions_list):
-    try:
-        first_index = LineofCode.index('"')
-        second_index = LineofCode.index(';')
-        function_name = LineofCode[first_index + 1:second_index]
-        if function_name not in Stub_Functions_list:
-            Stub_Functions_list.append(function_name)
-    except:
-        pass
+def getCalledSeq(ExptCalls_lst, CalledSeq_lst):
+    for lineofcode in ExptCalls_lst:
+        if (isCalledSeq(lineofcode)):
+            calledseq = getInsideQuote(lineofcode)
+            CalledSeq_lst.append(calledseq)
 
 
 ##################################################
    
 
-def check_content_Tester_define(list_Tester_Define_Declaration, list_Tester_Define_Init):
-    for var_defined in list_Tester_Define_Declaration:
-        if var_defined not in list_Tester_Define_Init:
-            print_writetoReport("\n- WARNING: " + var_defined + " was not INITIALISED")
+def checkTesterDef(TesterDef_lst):
+    (list_Declare, list_Init) = ([], [])
+
+    for lineofcode in TesterDef_lst:
+        if (isTesterDefDeclare(lineofcode)):
+            var_Declare = (lineofcode.split()[1]).replace(';', '')
+            list_Declare.append(var_Declare)
+
+        elif (isisTesterInit(lineofcode)):
+            var_Init = getInsideBracket(lineofcode)
+            list_Init.append(var_Init)
+
+    for elem in list_Declare:
+        if elem not in list_Init:
+            report_content.append(WARNING + elem + UNITIALIZED)
 
 
 ##################################################  
-   
 
-def check_list_to_check(list_to_check, list_checked, check1stTC):
-    for tocheck in list_to_check:
-        if tocheck not in list_checked:
-            if ((tocheck == "Compilation Flag") and (check1stTC == 0)):
-                continue
-            else:
-                print_writetoReport("\n- WARNING: Lack of " + tocheck)
+
+def check_TO_CHECK_LST(Checked_lst):
+    for tocheck in TO_CHECK_LST:
+        if tocheck not in Checked_lst:
+            report_content.append(WARNING + LACKOF + tocheck)
+    
+
+##################################################  
+
+
+def checkVCmapped(Checked_lst, VerfCrit_lst):
+    if ((VC in Checked_lst) and (len(VerfCrit_lst) > 0)):
+        VCmapped_check = 0
+        for lineofcode in VerfCrit_lst:
+            if isVC(lineofcode):
+                VCmapped_check = 1
+                break 
+        if not (VCmapped_check):
+            report_content.append(WARNING + NOVCMAPPED)
+
 
 ################################################## 
 
 
-def check_Stub_Functions(all_codes, Stub_Functions_list, begin_stub_functions_line):
-    print_writetoReport("\n\nChecking Stub & Isolate Functions...")
-    state = "Unidentified"
-    line_counter = begin_stub_functions_line
+def Review_Call_Interface(all_codes, CalledSeq_lst, begin_counter):
+    report_content.append(START_STUBFNC + PROCESSING)
+    state = UNDEFINED_STATE
+    fnc_used = 0
 
-    check_count = 0
-    param_count = 0
-    stub_declare_str = ""
-
-    for LineofCode in (all_codes[begin_stub_functions_line:]):
-        line_counter += 1
+    for LineCounter, LineofCode in enumerate(all_codes[begin_counter:], start = begin_counter+1 ):
         pre_state = state
-        state = state_machine_stub_functions(LineofCode, pre_state)
-
-        if (state == "End Test Script file"):
+        state = state_machine_stub_functions(LineofCode, pre_state, fnc_used)
+        
+        if ((state == BEGINFUNC) and (pre_state != state)):
+            fncname = (LineofCode.split())[4]
+            fnc_used = checkusedfnc(fncname, CalledSeq_lst)
+            (FncDec_str, InstContent_lst) = ('', [])
+        elif (state == ENDFUNC):
+            (fnc_used, FncDec_str) = (0, '')
+        elif (state == DECLAREFNC):
+            FncDec_str += LineofCode
+        elif ((state == REGISTERCALL) and (pre_state != state)):
+            param_count = CountParam(FncDec_str)
+        elif (state == BEGININTSTANCE):
+            InstContent_lst.append(LineofCode)
+        elif ((state == ENDINSTANCE) and (pre_state != state)):
+            checkInstance(fncname, param_count, InstContent_lst, CalledSeq_lst)
+            InstContent_lst = []
+        elif (state == ENDFILE):
             break
 
-        if (state == "Begin Stub Function"):
-            stub_declare_str += getStubDeclaration(LineofCode)
-            if (pre_state != state):
-                Stub_Function_name = getStubFunctionName(LineofCode)
-
-        if ((state == "REGISTER CALL") and (pre_state != state)):
-            param_count = getInputParam(stub_declare_str)
-
-        if (state == "Begin INSTANCE"):
-            if (pre_state != state):
-                instance_name = getInstanceName(LineofCode)
-                stub_with_instance = Stub_Function_name + "#" + instance_name
-            check_count += LineofCode.count('CHECK_')
-
-        if ((state == "End INSTANCE") and (pre_state != state)):
-            if ((stub_with_instance in Stub_Functions_list) and (check_count < param_count)):
-                    print_writetoReport("\n- WARNING: Lack of checking parameters in INSTANCE: " + instance_name + " at Function " + Stub_Function_name)
-            check_count = 0
-
-        if (state == "End Stub Function"):
-            stub_declare_str = ""
-            param_count = 0
-
         
 #################################################
 
-def state_machine_stub_functions(LineofCode, pre_state):
-    returnvalue = pre_state
-    if ((LineofCode.find('Stub for function') != -1) or (LineofCode.find('Isolate for function') != -1)):
-        returnvalue = "Begin Stub Function"
-        return returnvalue
+
+def state_machine_stub_functions(LineofCode, pre_state, fnc_used):
+    retval = pre_state
+
+    if (isBeginStubFunc(LineofCode)):
+        retval = BEGINFUNC
+    elif ((pre_state == BEGINFUNC) and (isNotComment(LineofCode)) and (fnc_used == 1)):
+        retval = DECLAREFNC
+    elif (isRegisterCall(LineofCode) and (fnc_used == 1)):
+        retval = REGISTERCALL
+    elif (isBeginInstance(LineofCode) and (fnc_used == 1)):
+        retval = BEGININTSTANCE
+    elif ((pre_state == BEGININTSTANCE)) and (isEndInstance(LineofCode)):
+        retval = ENDINSTANCE
+    elif (isEndStubFunction(LineofCode)):
+        retval = ENDFUNC
+    elif (isEndFile(LineofCode)):
+        retval = ENDFILE
     
-    if ((LineofCode.find('REGISTER_CALL') != -1)):
-        returnvalue = "REGISTER CALL"
-        return returnvalue
-        
-    if ((LineofCode.find('IF_INSTANCE') != -1)):
-        returnvalue = "Begin INSTANCE"
-        return returnvalue
+    return retval
 
-    if (pre_state == "Begin INSTANCE"):
-        if ((LineofCode.find('return') != -1)):
-            returnvalue = "End INSTANCE"
-            return returnvalue
-
-    if ((LineofCode.find('LOG_SCRIPT_ERROR') != -1)):
-        returnvalue = "End Stub Function"
-        return returnvalue
-
-    if ((LineofCode.find('End of test script') != -1)):
-        returnvalue = "End Test Script file"
-        return returnvalue
-    
-    return returnvalue
 
 #################################################
 
 
-def getStubDeclaration(LineofCode):
-    if ((LineofCode.find("/*") == -1)):
-        LineofCode = LineofCode.strip()
-        return LineofCode
-    else:
-         return str("")
+def checkusedfnc(fncname, CalledSeq_lst):
+    for elem in CalledSeq_lst:
+        if (fncname in elem):
+            return 1
+    return 0
 
 
 #################################################
 
-def getInputParam(StubDeclaration):
-    param_count = 0
-    inside_paren = StubDeclaration[StubDeclaration.find("(")+1:StubDeclaration.rfind(")")]
-    comma_count = inside_paren.count(",")
-    if (comma_count == 0):
-        if (len(inside_paren) == 0):
-            param_count = 0
-        else:
-            param_count = 1
-    else:
+
+def checkInstance(fncname, param_count, InstContent_lst, CalledSeq_lst):
+    check_count = 0
+    for elem in InstContent_lst:
+        if (isBeginInstance(elem)):
+            inst_name = getInsideBracket(elem)
+        check_count += elem.count(CHECK_PARAM)
+
+    seq_name = fncname + '#' + inst_name
+
+    if (seq_name not in CalledSeq_lst):
+        return
+    elif (check_count < param_count):
+        report_content.append(WARNING + LACKOF + PARAMETER_CHECK + inst_name + OF_FUNCTION + fncname)
+
+
+#################################################
+
+
+def CountParam(func_declaration):
+    func_declaration = func_declaration.replace(' ', '').replace('\n','')
+    input_param = getInsideBracket(func_declaration)
+    comma_count = input_param.count(',')
+    if (comma_count > 0): 
         param_count = comma_count + 1
+    else:
+        if (len(input_param) == 0): param_count = 0
+        else: param_count = 1
+
     return param_count
+    
 
 
 #################################################
 
 
-def getStubFunctionName(LineofCode):
-    LineofCode = LineofCode[::-1]
-    LineofCode = LineofCode[4::]
-    first_index = LineofCode.index(' ')
-    function_name = LineofCode[0:first_index]
-    function_name = function_name[::-1].strip()
+def getInsideQuote(LineofCode):
+    if (LineofCode.count('"') == 2):
+        inside_quote = LineofCode[LineofCode.find('"')+1:LineofCode.rfind('"')]
+        inside_quote = inside_quote.replace(';','')
+        return inside_quote
+    return None
 
-    return function_name
+
+#################################################
+
+
+def getInsideBracket(LineofCode):
+    if (('(' in LineofCode) and (')' in LineofCode)):
+        inside_bracket = LineofCode[LineofCode.find('(')+1:LineofCode.rfind(')')]
+        inside_bracket = inside_bracket.replace('"', '')
+        return inside_bracket
+    return None
+
 
 #################################################
 
-def getInstanceName(LineofCode):
-    first_index = LineofCode.index('(')
-    second_index = LineofCode.index(')')
-    LineofCode = LineofCode[first_index + 1:second_index]
-    LineofCode = re.sub(r'\s+', '', LineofCode)
-    instance_name = LineofCode[1:-1]
 
-    return instance_name
+def isTesterDefDeclare(lineofcode):
+    if (('INITIALISE' not in lineofcode) and ('_entity' in lineofcode) and ('=' not in lineofcode) and ('[' not in lineofcode)
+        and (isNotComment(lineofcode))): return 1
+    else: return 0
 
+def isisTesterInit(lineofcode):
+    if (('INITIALISE' in lineofcode) and (('_entity') in lineofcode) and (isNotComment(lineofcode))): return 1
+    else: return 0
+
+def isTestScriptWarning(lineofcode):
+    if (('TEST_SCRIPT_WARNING' in lineofcode) and (isNotComment(lineofcode))): return 1
+    else: return 0
+
+def isBeginDeclareTestCases(lineofcode):
+    if (('void run_tests()' in lineofcode) and (';' not in lineofcode)): return 1
+    else: return 0
+
+def isEndDeclareTestCases(lineofcode):
+    if ('EXPORT_COVERAGE' in lineofcode): return 1
+    else: return 0
+
+def isUsedTestCase(lineofcode):
+    if (('(1)' in lineofcode) and (isNotComment(lineofcode))): return 1
+    else: return 0
+
+def isBeginTestCase(lineofcode):
+    if (('void' in lineofcode) and ('int doIt' in lineofcode)): return 1
+    else: return 0
+
+def isCalledSeq(lineofcode):
+    if ((lineofcode.count('"') == 2) and ('#' in lineofcode)): return 1
+    else: return 0
+
+def isVC(lineofcode):
+    if ((('{' in lineofcode) and ('}' in lineofcode)) or ('Not Applicable' in lineofcode)): return 1
+    else: return 0
+
+def isEndTestCase(lineofcode):
+    if ('END_TEST();') in lineofcode: return 1
+    else: return 0
+
+def isEndAllTestCases(lineofcode):
+    if ('Call Interface Control') in lineofcode: return 1
+    else: return 0
+
+def isBeginStubFunc(lineofcode):
+    if (('Stub for function' in lineofcode) or ('Isolate for function' in lineofcode)): return 1
+    else: return 0
+
+def isRegisterCall(lineofcode):
+    if ('REGISTER_CALL' in lineofcode): return 1
+    else:  return 0
+
+def isBeginInstance(lineofcode):
+    if ('IF_INSTANCE' in lineofcode): return 1
+    else: return 0
+
+def isEndInstance(lineofcode):
+    if ('return' in lineofcode): return 1
+    else: return 0
+
+def isEndStubFunction(lineofcode):
+    if ('LOG_SCRIPT_ERROR' in lineofcode): return 1
+    else: return 0
+
+def isEndFile(lineofcode):
+    if ('End of test script' in lineofcode): return 1
+    else: return 0
+
+def isNotComment(lineofcode):
+    if (('//' not in lineofcode) and ('/*' not in lineofcode) and ('*/' not in lineofcode)): return 1
+    else: return 0
+
+        
 #################################################
- 
-def print_writetoReport(content):
-    print(content)
-    report_Script.write(content)
-
-#################################################  
