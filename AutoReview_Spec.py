@@ -1,196 +1,130 @@
 import os
-import re
 import xlrd
-from AutoReivew_Common import print_writetoReport
+from AutoReivew_Common import Export_Report
+from ReviewSpec_Def import *
+import time
 
 
 #################################################
 
+def main_Spec(input_dir, report_name):
+    global report_content
+    report_content = []
 
-def main_Spec(dir, report_name):
-    global report_Spec
-    report_Spec = open(report_name, "w")
+    spec_dir = input_dir + TEST_SPEC_DIR
+    specfile_lst = findSpecdir(spec_dir)
 
-    directory_Spec = dir + "/01_TestSpecification/"
-    global workbook_Spec, all_sheet_Spec
-    list_TestSpecs_files = findAllTestSpecs(directory_Spec)
-
-    for TestSpec_file in list_TestSpecs_files:
-        print_writetoReport("Checking file " + TestSpec_file + "...\n")
-        TestSpec_path = directory_Spec + TestSpec_file
-        try:
-            workbook_Spec = xlrd.open_workbook(TestSpec_path)
-        except Exception as e:
-            print_writetoReport("Cannot open "+ TestSpec_path + "\n" + str(e))
-            continue
-
-        all_sheet_Spec = workbook_Spec.sheet_names()
-        Check_Stream_Spec()
-        Find_TCSheet_Spec()
-        workbook_Spec.release_resources()
-        del workbook_Spec
-        print_writetoReport("\n\n*********************************************************\n\n")
-
-    report_Spec.close()
-
-#################################################
-
-def getReportName(dir):
-    #get current active branch
-    try:
-        repo = Repo(dir, search_parent_directories=True)
-        active_branch = str(repo.active_branch)
-    except Exception as e:
-        print("Cannot find current active branch in git")
-        active_branch = 'defaultbranch'
+    for specfile in specfile_lst:
+        OpenWorkbook(specfile)
     
-    #get datetime
-    time = str(datetime.now().strftime("%H%M%S"))
-    #print(time)
-
-    #Report name
-    report_name = "Review_TestSpec_" + active_branch + "_" + time + ".txt"
-    
-    return report_name
+    Export_Report(report_name, report_content)
 
 
 #################################################
 
 
-def findAllTestSpecs(directory_Spec):
-    list_Specfiles = []
-    for root, dirs, files in os.walk(directory_Spec):
+def findSpecdir(spec_dir):
+    specfile_lst = []
+    for path, dirs, files in os.walk(spec_dir):
         for filename in files:
-            if not (filename[0:2] == '~$'): #check for temporary if file is opening
-                list_Specfiles.append(filename)
+            if not (filename.startswith('~$')): #check for temporary if file is opening
+                filepath = os.path.join(path, filename)
+                specfile_lst.append(filepath)
 
-    if (len(list_Specfiles) == 0):
-        print_writetoReport("\n- WARNING: Cannot find any Test Spec file.\nThe tool stopped here.")
+    if not (specfile_lst):
+        report_content.append(NO_SPEC_FOUND)
 
-    return list_Specfiles
+    return specfile_lst
 
 
 #################################################
 
 
-def Check_Stream_Spec():
-    print_writetoReport("\n\nChecking TestResultSummary sheet...")
+def OpenWorkbook(specfile):
+    report_content.append(START_SPEC_FILE + specfile + PROCESSING)
     try:
-        TestReultSummary_sheet = workbook_Spec.sheet_by_name('TestResultSummary')
+        spec_workbook = xlrd.open_workbook(specfile)
+        all_sheets = spec_workbook.sheet_names()
     except Exception as e:
-        print_writetoReport("\n- WARNING: Cannot open TestResultSummary sheet\n" + str(e))
+        report_content.append(UNABLE_OPEN_SPEC)
+        report_content.append(END_SPEC_FILE)
         return
 
-    check_feature_under_tests = 0
-    for column_index in range(TestReultSummary_sheet.ncols):
-        for row_index in range(TestReultSummary_sheet.nrows):
-            feature_under_test = str(TestReultSummary_sheet.cell(row_index,column_index).value)
-            if (feature_under_test.find("Feature under tests name") != -1 ):
-                check_feature_under_tests = 1
-                stream = TestReultSummary_sheet.cell(row_index,column_index+2).value
-                break
-        if (check_feature_under_tests == 1):
-            break
-        
-    if not (check_feature_under_tests):
-        print_writetoReport("\n- WARNING: Cannot find Feature under tests name in TestResultSummary sheet")
-        return
+    check_Stream(spec_workbook)
+    tcunit_lst = get_TCSheet(all_sheets)
+    check_TCSheet(tcunit_lst, spec_workbook)
 
-    Check_Stream_Spec = re.search('CUBAS', stream)
-    if not (Check_Stream_Spec):
-        print_writetoReport("\n- WARNING: CUBAS Stream was not filled")
-
-    print_writetoReport("\n")
+    spec_workbook.release_resources()
+    del spec_workbook
+    report_content.append(END_SPEC_FILE)
 
 
 #################################################
 
 
-def Find_TCSheet_Spec():
-    list_TC_sheets = []
-    for sheet_name in all_sheet_Spec:
-        checkTCUnit_sheet = re.search('TC_Unit_', sheet_name)
-        if checkTCUnit_sheet:
-            list_TC_sheets.append(sheet_name)
+def check_Stream(spec_workbook):
+    report_content.append(CHECKING + TEST_RESULT_SUMMARY_SHEET + PROCESSING)
+    try:
+        current_sheet = spec_workbook.sheet_by_name(TEST_RESULT_SUMMARY_SHEET)
+    except Exception as e:
+        report_content.append(WARNING + UNABLE_OPEN_SHEET + TEST_RESULT_SUMMARY_SHEET)
+        return
 
-    if not (list_TC_sheets == []):
-        Scan_TCSheet(list_TC_sheets)
+    try:
+        stream_content = current_sheet.cell(STREAM_POSITION[0], STREAM_POSITION[1]).value
+    except:
+        report_content.append(WARNING + UNABLE_READ_STREAM)
+        return
+
+    if (CUBAS not in stream_content):
+        report_content.append(WARNING + CUBAS + CONTENT_EMPTY)
+
+
+#################################################
+
+
+def get_TCSheet(all_sheets):
+    TCUnit_sheet_lst = []
+    for sheet_name in all_sheets:
+        if (TCUNIT_SHEET in sheet_name):
+            TCUnit_sheet_lst.append(sheet_name)
+
+    if not (TCUnit_sheet_lst):
+        report_content.append(WARNING + TCUNIT_NOT_FOUND)
+        return
     else:
-        print_writetoReport("\n -WARNING: Cannot find any TC_Unit sheet. \nThe tool stopped here.")
-        return
+        return TCUnit_sheet_lst
 
 #################################################
 
 
-def Scan_TCSheet(list_TC_sheets):
-    list_to_check = ["Test Case Expected Results","Covered Design_Id","Set Global Variables",
-                    "Set Parameters","Set Stub Functions"]
-    for TCSheet in list_TC_sheets:
-        list_checked = []
-        print_writetoReport("\n\nChecking sheet: " + TCSheet + "...")
-        Current_Sheet = workbook_Spec.sheet_by_name(TCSheet)
-        for row_index in range(Current_Sheet.nrows):
-            content_reference = (Current_Sheet.cell(row_index, 0).value).strip()
-            if not (content_reference == "" ):
-                content = Current_Sheet.cell(row_index, 1).value
-                Check_TCSheet_content(content_reference,content,list_checked)
-        Compare_Checked_toCheck(list_checked, list_to_check, TCSheet)
-        print_writetoReport("\n")
+def check_TCSheet(tcunit_lst, spec_workbook):
+    for tc_unit_sheet in tcunit_lst:
+        report_content.append(CHECKING + tc_unit_sheet + PROCESSING)
+        current_sheet = spec_workbook.sheet_by_name(tc_unit_sheet)
 
+        for index, pos_to_check in enumerate(LIST_TO_CHECK_POS):
+            try:
+                cell_content = current_sheet.cell(pos_to_check[0], pos_to_check[1]).value
+            except: 
+                report_content.append(WARNING + UNABLE_TO_READ + LIST_TO_CHECK[index])
+                continue
 
-#################################################
-
-
-def Check_TCSheet_content(content_reference,content,list_checked):
-    # Check Covered Design_Id #
-    if (content_reference == "Test Case Expected Results"):
-        list_checked.append(content_reference)
-        if (len(content.strip()) == 0):
-            print_writetoReport("\n- WARNING: Test Case Expected Results was not filled")
-
-    # Check Covered Design_Id #
-    elif (content_reference == "Covered Design_Id"):
-        list_checked.append(content_reference)
-        if ((content.strip() == "Missing GUID") or (len(content.strip()) == 0)):
-            print_writetoReport("\n- WARNING: GUID was not filled")
-
-    # Check Set #
-    elif (content_reference == "Set"):
-        if (re.search("Global", content)):
-            identity = "Set Global Variables"
-        elif (re.search("Parameters", content)):
-            identity = "Set Parameters"
-        elif (re.search("Stub", content)):
-            identity = "Set Stub Functions"
-        else: return
-        list_checked.append(identity)    
-        check_Set_Global_Variables(content,identity)
-
+            review_Content(cell_content.strip(), LIST_TO_CHECK[index])
+            
 
 #################################################
 
-def check_Set_Global_Variables(content, indentity):
-    check_ptr = content.count('ptr_') + content.count('_ptr')
-    check_entity = content.count('_entity')
-    check_fnc = content.count('_fnc') + content.count('fnc_')
-    check_asteris = content.count('*')
 
-    if (check_ptr > 0):
-        print_writetoReport("\n- WARNING: Remaining " + str(check_ptr) + " (ptr) in " + indentity)
-    if (check_entity > 0):
-        print_writetoReport("\n- WARNING: Remaining " + str(check_entity) + " (_entity) in " + indentity)
-    if (check_fnc > 0):
-        print_writetoReport("\n- WARNING: Remaining " + str(check_fnc) + " (fnc) in " + indentity)
-    if (check_asteris > 0):
-        print_writetoReport("\n- WARNING: Remaining " + str(check_asteris) + " (*) in " + indentity)
+def review_Content(cell_content, content_refer):
+    if not (cell_content):
+        report_content.append(WARNING + content_refer + CONTENT_EMPTY)
 
-
-#################################################
-
-def Compare_Checked_toCheck(list_checked, list_to_check, TCSheet):
-    for tocheck in list_to_check:
-        if tocheck not in list_checked:
-            print_writetoReport("\n- WARNING: Cannot find " + tocheck + " in " + TCSheet)
+    if (content_refer in (SET_GLOBAL_VARIABLES, SET_PARAMETERS, SET_STUB_FUNCTIONS)):
+        for to_check in LIST_REMAINING_TO_CHECK:
+            if (to_check in cell_content):
+                count = cell_content.count(to_check)
+                report_content.append(WARNING + str(count) + SPACE + to_check + REMAINING + IN + SPACE + content_refer)
 
 
 #################################################

@@ -11,12 +11,20 @@ from PyQt5.QtCore import Qt, QRect
 from PyQt5 import QtGui
 from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget, QToolButton, QPushButton, QLineEdit, QMessageBox, QLabel, QFileDialog
 import AutoReview_Script as AutoReview_Script
-# import AutoReview_Spec as AutoReview_Spec
+import AutoReview_Spec as AutoReview_Spec
 # import AutoReview_Summ as AutoReview_Summ
 from datetime import datetime
-#from timeit import default_timer as timer
+############################################################################
 
-#################################################
+SLASH = "/"
+BACKSLASH = "\\"
+GITLOCATION = "rba"
+GITFOLDER = ".git"
+BRANCHMASTER = "master"
+REPORT_PREFIX = "Report_"
+TXTFILETYPE = ".txt"
+
+############################################################################
 
 
 class App(QMainWindow):
@@ -116,7 +124,7 @@ class App(QMainWindow):
 
     def Review_Test_Script(self):
         root_dir = self.textbox.text()
-        if (root_dir == ""):
+        if (len(root_dir) == 0):
             QMessageBox.warning(self, 'Auto Review Tool', 'Plese input a directory')
         else:
             report_name = getReportName(root_dir, "Script")
@@ -130,7 +138,7 @@ class App(QMainWindow):
 
     def Review_Test_Spec(self):
         root_dir = self.textbox.text()
-        if (root_dir == ""):
+        if (len(root_dir) == 0):
             QMessageBox.warning(self, 'Auto Review Tool', 'Plese input a directory')
         else:
             report_name = getReportName(root_dir, "Spec")
@@ -141,7 +149,7 @@ class App(QMainWindow):
 
     def Review_Test_Summ(self):
         root_dir = self.textbox.text()
-        if (root_dir == ""):
+        if (len(root_dir) == 0):
             QMessageBox.warning(self, 'Auto Review Tool', 'Plese input a directory')
         else:
             if (CheckNumberofFiles(root_dir)):
@@ -157,22 +165,27 @@ class App(QMainWindow):
 #################################################
 
 
-def getReportName(roor_dir, report_type):
+def getReportName(root_dir, report_type):
+    root_dir = root_dir.replace(BACKSLASH, SLASH)
+    compname_index = root_dir.rfind(SLASH)
+    comp_name = root_dir[compname_index+1:]
+    git_dir = root_dir.split(GITLOCATION, 1)[0]
 
-    #get Component name
-    try:
-        inverse_dir = roor_dir[::-1]
-        first_slash_index = inverse_dir.index("/")
-        component_name = inverse_dir[:first_slash_index]
-        component_name = component_name[::-1]
-    except Exception as e:
-        component_name = "default"
+    if (GITFOLDER in os.listdir(git_dir)):
+        try:
+            repo = Repo(os.path.join(git_dir, GITFOLDER))
+            info = str(repo.active_branch)
+            if (info == BRANCHMASTER): info = info + '_' + comp_name
+        except:
+            info = comp_name
+    else:
+        info = comp_name
 
     #get datetime
     time = str(datetime.now().strftime("%H%M%S"))
 
     #Report name
-    report_name = "Review_" + report_type + "_" + component_name + "_" + time + ".txt"
+    report_name = REPORT_PREFIX + report_type + "_" + info + "_" + time + TXTFILETYPE
     return report_name
 
 
@@ -181,7 +194,10 @@ def getReportName(roor_dir, report_type):
 
 def Open_latest_report():
     latest_file = max(glob.glob('*.txt'), key=os.path.getctime)
-    os.system("start notepad.exe " + latest_file)
+    try:
+        os.system("start notepad++.exe " + latest_file)
+    except:
+        os.system("start notepad.exe " + latest_file)
            
 
 #################################################
@@ -228,3 +244,5 @@ if __name__ == '__main__':
     ex = App()
     sys.exit(app.exec_())
 
+
+#################################################

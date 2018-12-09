@@ -7,18 +7,16 @@ import time
 #################################################
 
 
-def main_Script(dir, report_name):
+def main_Script(input_dir, report_name):
     start_time = time.time()
     global report_content
     report_content = []
 
-    directory_Script = dir + "/02_TestScript/"
-    list_dir_script = findScriptdir(directory_Script)
+    script_dir = input_dir + TEST_SCRIPT_DIR
+    list_dir_script = findScriptdir(script_dir)
 
     for dir_script in list_dir_script:
-        report_content.append(START_C_FILE + dir_script + PROCESSING)
         ScanTestScript(dir_script)
-        report_content.append(END_C_FILE)
 
     Export_Report(report_name, report_content)
     elapsed_time = time.time() - start_time
@@ -28,38 +26,38 @@ def main_Script(dir, report_name):
 #################################################
 
 
-def findScriptdir(directory_Script):
-    list_dir_Cfiles = []
-    for path, subdirs, files in os.walk(directory_Script):
+def findScriptdir(script_dir):
+    Cfile_lst = []
+    for path, subdirs, files in os.walk(script_dir):
         for filename in files:
             if filename.endswith(".c"):
                 filepath = os.path.join(path, filename)
-                list_dir_Cfiles.append(filepath)
+                Cfile_lst.append(filepath)
 
-    if (len(list_dir_Cfiles) == 0):
-        report_content.append(FILE_NOT_FOUND)
+    if (len(Cfile_lst) == 0):
+        report_content.append(NO_SCRIPT_FOUND)
 
-    return list_dir_Cfiles
+    return Cfile_lst
 
 
 #################################################
 
 
 def ScanTestScript(dir_script):
+    report_content.append(START_C_FILE + dir_script + PROCESSING)
     try:
         C_file = open(dir_script, "r")
-        all_codes = C_file.readlines()
     except Exception as e:
-        report_content.append(UNABLE_OPEN_FILE)
+        report_content.append(UNABLE_OPEN_SCRIPT)
+        report_content.append(END_C_FILE)
         return
 
+    all_codes = C_file.readlines()
     state = 0
-
     for LineCounter, LineofCode in enumerate(all_codes, start = 1):
         pre_state = state
         state = state_machine_Init(LineofCode, pre_state)
-        if (state == 1):
-            pass
+        if (state == 1): pass
         elif (state == 2): 
             begincheckTCline = LineCounter
             break
@@ -225,6 +223,7 @@ def Review_Call_Interface(all_codes, CalledSeq_lst, begin_counter):
             checkInstance(fncname, param_count, InstContent_lst, CalledSeq_lst)
             InstContent_lst = []
         elif (state == ENDFILE):
+            report_content.append(END_C_FILE)
             break
 
         
