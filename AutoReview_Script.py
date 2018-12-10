@@ -1,14 +1,12 @@
 import os
 from AutoReivew_Common import Export_Report
 from Report_Definition import *
-import time
 
 
 #################################################
 
 
 def main_Script(input_dir, report_name):
-    start_time = time.time()
     global report_content
     report_content = []
 
@@ -19,8 +17,6 @@ def main_Script(input_dir, report_name):
         ScanTestScript(dir_script)
 
     Export_Report(report_name, report_content)
-    elapsed_time = time.time() - start_time
-    print(elapsed_time)
 
 
 #################################################
@@ -34,7 +30,7 @@ def findScriptdir(script_dir):
                 filepath = os.path.join(path, filename)
                 Cfile_lst.append(filepath)
 
-    if (len(Cfile_lst) == 0):
+    if not (Cfile_lst):
         report_content.append(NO_SCRIPT_FOUND)
 
     return Cfile_lst
@@ -185,7 +181,7 @@ def check_TO_CHECK_LST(Checked_lst):
 
 
 def checkVCmapped(Checked_lst, VerfCrit_lst):
-    if ((VC in Checked_lst) and (len(VerfCrit_lst) > 0)):
+    if ((VC in Checked_lst) and ( not (VerfCrit_lst))):
         VCmapped_check = 0
         for lineofcode in VerfCrit_lst:
             if isVC(lineofcode):
@@ -289,7 +285,7 @@ def CountParam(func_declaration):
     if (comma_count > 0): 
         param_count = comma_count + 1
     else:
-        if (len(input_param) == 0): param_count = 0
+        if not (input_param): param_count = 0
         else: param_count = 1
 
     return param_count
